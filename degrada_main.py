@@ -33,8 +33,10 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 
 import PIconnect as PI
-from System.Net import NetworkCredential
 from PIconnect.PIConsts import AuthenticationMode
+
+#from System.Net import NetworkCredential
+
 #comentario 1
 plt.style.use('ggplot')
 #
@@ -137,31 +139,46 @@ class DegradaApp:
         print('Cargando datos')
         self.ui_obj = ui_obj
         self.usuario_logeado = False
-        self.df_pot = pd.read_pickle('./dataset/data_potencia.pkl')
-        self.df_wind = pd.read_pickle('./dataset/data_viento.pkl')
+        self.df_pot = pd.read_csv('./dataset/potencia_rubi.csv', index_col=0, parse_dates=True)
+        self.df_wind = pd.read_csv('./dataset/irradiancia_rubi.csv', index_col=0, parse_dates=True)
 
-        #pc ref:
-        #self.df_mu = pd.read_excel('./dataset/wayra_pc_ref.xlsx', sheet_name='media').drop_duplicates().sort_values('BIN')
-        #self.df_low = pd.read_excel('./dataset/wayra_pc_ref.xlsx', sheet_name='lowlim').drop_duplicates().sort_values('BIN')
-        #self.df_pot = self.TransformaDF(self.df_pot)
-        #self.df_wind = self.TransformaDF(self.df_wind)
+        # self.df_pot['Mes'] = self.df_pot.index.to_series().apply(lambda x: x.month)
+        # self.df_pot['Anno'] = self.df_pot.index.to_series().apply(lambda x: x.year)
+        #
+        # self.df_wind['Mes'] = self.df_pot.index.to_series().apply(lambda x: x.month)
+        # self.df_wind['Anno'] = self.df_pot.index.to_series().apply(lambda x: x.year)
+        # #pc ref:
+        # #self.df_mu = pd.read_excel('./dataset/rubi_pc_ref.xlsx', sheet_name='media').drop_duplicates().sort_values('BIN')
+        # #self.df_low = pd.read_excel('./dataset/rubi_pc_ref.xlsx', sheet_name='lowlim').drop_duplicates().sort_values('BIN')
+        # self.df_pot = self.TransformaDF(self.df_pot)
+        # self.df_wind = self.TransformaDF(self.df_wind)
+        #
+        # self.df_pot.to_pickle('./potencia_rubi.csv')
+        # self.df_wind.to_pickle('./irradiancia_rubi.csv')
+
         #pot_tags, wind_tags
         self.pot_tags = self.df_pot.columns[:-2]
         self.wind_tags = self.df_wind.columns[:-2]
 
         # INPUTS:
         #Lista de años disponibles
-        self.YEAR_LIST = np.sort(list(self.df_pot.loc[:,'Anno'].unique()))
+        self.YEAR_LIST = np.sort(list(self.df_pot.loc[:,'Anno'].unique())).astype(int)
         #lista de meses:
-        self.MONTH_LIST = np.sort(list(self.df_pot.loc[:,'Mes'].unique()))
-        #Lista de WTG's:
-        self.WTG_LIST = np.arange(1,len(self.pot_tags)+1)
-        #MONTH_LIST, YEAR_LIST, WTG_LIST
+        self.MONTH_LIST = np.sort(list(self.df_pot.loc[:,'Mes'].unique())).astype(int)
+        #Lista de inversores:
+        inver_x_cab = list(range(1,5)) #inversores de 1 a 4
+        cab_totales = np.arange(1,42) #cabinas de 1 a 41
+        lista_inv = np.sort(np.repeat(cab_totales,len(inver_x_cab)), axis=None)
+        lista_inv = lista_inv + np.array(inver_x_cab*len(cab_totales))*.1
+        #print(lista_inv)
+        self.INV_LIST = lista_inv
+        #MONTH_LIST, YEAR_LIST, INV_LIST
+        #SELF.WTG_LIST = np.arange(1,42)
 
         #DEFAULT:
         self.MES_I = datetime.datetime.now().month
         self.MES_J = datetime.datetime.now().month
-        self.ANNO_I = 2022
+        self.ANNO_I = datetime.datetime.now().year
         self.ANNO_J = 2021
 
         #Reemplazar datos faltantes
@@ -201,15 +218,15 @@ class DegradaApp:
         return serie1
 
     def CalculaLP(self, puntos_x, puntos_y):
-        df_ref = pd.read_excel('./dataset/wayra_pc_ref.xlsx', sheet_name='media')
-        df_inf = pd.read_excel('./dataset/wayra_pc_ref.xlsx', sheet_name='lowlim')
-        df_ref.drop_duplicates(inplace=True)
-        df_inf.drop_duplicates(inplace=True)
-        df_ref.sort_values('BIN', ascending=True)
-        df_inf.sort_values('BIN', ascending=True)
+        df_ref = pd.read_excel('./dataset/rubi_pc_ref.xlsx')
+        #df_inf = pd.read_excel('./dataset/rubi_pc_ref.xlsx', sheet_name='lowlim')
+        # df_ref.drop_duplicates(inplace=True)
+        # df_inf.drop_duplicates(inplace=True)
+        # df_ref.sort_values('BIN', ascending=True)
+        # df_inf.sort_values('BIN', ascending=True)
 
-        y_ideal = np.interp(puntos_x, df_ref.iloc[:,0], df_ref.iloc[:,1])
-        y_low = np.interp(puntos_x, df_inf.iloc[:,0], df_inf.iloc[:,1])
+        y_ideal = np.interp(puntos_x, df_ref.loc[:,'bin'], df_ref.loc[:,'mu'])
+        y_low = np.interp(puntos_x, df_ref.loc[:,'bin'], df_ref.loc[:,'low'])
         diff_arr = y_ideal - puntos_y
         diff_arr = np.nan_to_num(diff_arr)
         diff_arr = diff_arr[np.where(y_low>puntos_y)]
@@ -233,7 +250,7 @@ class DegradaApp:
             y_arr = y_arr[error_mask].reshape(-1,1)
         else:
             x_arr = np.ones(10).reshape(-1,1)
-            y_arr = np.linspace(1,16,10).reshape(-1,1)
+            y_arr = np.linspace(1,1100,10).reshape(-1,1)
 
         x_norm = scaler_x.fit_transform(x_arr)
         y_norm = scaler_y.fit_transform(y_arr).reshape(-1,)
@@ -241,7 +258,7 @@ class DegradaApp:
         modelo = SVR(kernel='rbf', C=50, epsilon=.001)
         modelo.fit(x_norm, y_norm)
 
-        x_test= np.linspace(4,13,100)
+        x_test= np.linspace(60,1100,100)
         x_test_n = scaler_x.transform(x_test.reshape(-1,1))
 
         y_hat_norm = modelo.predict(x_test_n)
@@ -260,8 +277,8 @@ class DegradaApp:
         return curva_fit, int_point
 
     def EjecutaDiferencias(self, Tupla_I, Tupla_J):
-        wtg_i, mes_i, anno_i = Tupla_I[0], Tupla_I[1], Tupla_I[2]
-        wtg_j, mes_j, anno_j = Tupla_J[0], Tupla_J[1], Tupla_J[2]
+        wtg_i, mes_i, anno_i = Tupla_I[0], Tupla_I[1], Tupla_I[2] #inversor_num, mes, anno
+        wtg_j, mes_j, anno_j = Tupla_J[0], Tupla_J[1], Tupla_J[2] #inversor_num, mes, anno
 
         wind_i, pot_i = self.Getcurva(wtg_i, mes_i, anno_i) #filtra datos por wtg, mes y anno
         wind_j, pot_j = self.Getcurva(wtg_j, mes_j, anno_j) #filtra datos por wtg, mes y anno
@@ -298,21 +315,23 @@ class DegradaApp:
         self.diff_chache_list = []
         self.diff_per_chache_list = []
 
-        self.Turbina_eval = int(self.ui_obj.comboBox_wtg.currentText()) # 1 al 42
-        output_dict = {'WTG':[],
-                       'delta Vel. [m/s]':[],
+        self.inversor_eval = float(self.ui_obj.lineEdit_inv.text()) # 1.1 al 41.4
+        output_dict = {'INV':[],
+                       'delta Irr.':[],
                        'delta Degr. [%]':[]
                       #'delta Norma':[]
                       }
-        turbina_idx = self.Turbina_eval - 1 # 0 al 41
-        tupla_1 = (turbina_idx, self.MES_I, self.ANNO_I)
-        tupla_2 = (turbina_idx, self.MES_J, self.ANNO_J)
+        #turbina_idx = self.Turbina_eval - 1 # 0 al 41
+        #inversor_idx = np.where(self.INV_LIST==self.inversor_eval)[0][0]
+        #print(inversor_idx)
+        tupla_1 = (self.inversor_eval, self.MES_I, self.ANNO_I)
+        tupla_2 = (self.inversor_eval, self.MES_J, self.ANNO_J)
         curva_y1, point_1, curva_y2, point_2, diff, diff_per = self.EjecutaDiferencias(tupla_1, tupla_2)
         #diff_pw = (point_1[1]-point_2[1])
         #diff_Norm = np.sqrt(diff_pw**2 + diff_pw**2)
         #diff_Norm = np.sign(diff_per)*diff_Norm
-        output_dict['WTG'].append(str(self.Turbina_eval))
-        output_dict['delta Vel. [m/s]'].append(round(diff,4))
+        output_dict['INV'].append(str(self.inversor_eval))
+        output_dict['delta Irr.'].append(round(diff,4))
         output_dict['delta Degr. [%]'].append(round(diff_per,4))
         #output_dict['delta Norma'].append(round(diff_Norm,4))
 
@@ -343,8 +362,8 @@ class DegradaApp:
 
         #print(self.WTG_LIST)
         #len(self.WTG_LIST)
-        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.WTG_LIST==int(self.df_summ.iloc[0,0]))[0][0])
-        self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.WTG_LIST==int(self.df_summ.iloc[0,0]))[0][0])
+        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.INV_LIST==float(self.df_summ.iloc[0,0]))[0][0])
+        self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==float(self.df_summ.iloc[0,0]))[0][0])
         self.ui_obj.comboBox_MES_I_GR.setCurrentIndex(np.where(self.MONTH_LIST==self.MES_I)[0][0])
         self.ui_obj.comboBox_MES_J_GR.setCurrentIndex(np.where(self.MONTH_LIST==self.MES_J)[0][0])
         self.ui_obj.comboBox_ANNO_I_GR.setCurrentIndex(np.where(self.YEAR_LIST==self.ANNO_I)[0][0])
@@ -376,9 +395,9 @@ class DegradaApp:
                       }
 
         PB_v = 0 #inicio del valor de progession bar
-        VALOR_PB = PB_v/self.WTG_LIST.shape[0]
+        VALOR_PB = PB_v/self.INV_LIST.shape[0]
 
-        for wtg_idx, wtg_num in enumerate(self.WTG_LIST):
+        for wtg_idx, wtg_num in enumerate(self.INV_LIST):
             #Analisis:
             tupla_1 = (wtg_idx, self.MES_I, self.ANNO_I)
             tupla_2 = (wtg_idx, self.MES_J, self.ANNO_J)
@@ -399,7 +418,7 @@ class DegradaApp:
             self.diff_per_chache_list.append(diff_per)
 
             PB_v += 1
-            self.ui_obj.progressBar.setValue(int(PB_v/self.WTG_LIST.shape[0]))
+            self.ui_obj.progressBar.setValue(int(PB_v/self.INV_LIST.shape[0]))
 
         self.ui_obj.progressBar.setValue(100)
 
@@ -418,8 +437,8 @@ class DegradaApp:
         TABLA_model = PandasModel(self.df_summ)
         self.ui_obj.tableView_TABLA.setModel(TABLA_model)
 
-        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.WTG_LIST==int(self.df_summ.iloc[0,0]))[0][0])
-        self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.WTG_LIST==int(self.df_summ.iloc[0,0]))[0][0])
+        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.INV_LIST==int(self.df_summ.iloc[0,0]))[0][0])
+        self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==int(self.df_summ.iloc[0,0]))[0][0])
         self.ui_obj.comboBox_MES_I_GR.setCurrentIndex(np.where(self.MONTH_LIST==self.MES_I)[0][0])
         self.ui_obj.comboBox_MES_J_GR.setCurrentIndex(np.where(self.MONTH_LIST==self.MES_J)[0][0])
         self.ui_obj.comboBox_ANNO_I_GR.setCurrentIndex(np.where(self.YEAR_LIST==self.ANNO_I)[0][0])
@@ -429,17 +448,21 @@ class DegradaApp:
         #with open('./data_dict.pkl', 'wb') as f:
         #    pk.dump(dict_data, f)
 
-    def Getcurva(self, WTG_I, MES_I, ANNO_I):
+    def Getcurva(self, inversor_i, MES_I, ANNO_I):
         mascara_pwr_i = (self.pot_arr[:,self.mes_idx]==MES_I) * (self.pot_arr[:,self.anno_idx]==ANNO_I)
         mascara_wnd_i = (self.wind_arr[:,self.mes_idx]==MES_I)*(self.wind_arr[:,self.anno_idx]==ANNO_I)
         #pot_i = self.pot_arr[mascara_pwr_i, :][:, WTG_I]
         #wind_i = self.wind_arr[mascara_wnd_i, :][:, WTG_I]
-        pot_i = self.pot_arr[mascara_pwr_i, WTG_I]
-        wind_i = self.wind_arr[mascara_wnd_i, WTG_I]
-        return wind_i, pot_i
+        inversor_idx = np.where(self.INV_LIST==inversor_i)[0][0]
+        pot_i = self.pot_arr[mascara_pwr_i, inversor_idx]
+        cab_idx = int((inversor_i//1)-1)
+        #print(inversor_idx, cab_idx)
+        irr_i = self.wind_arr[mascara_wnd_i, cab_idx]
 
-    def GetPitchxWTG(self):
-        wtg_num = int(self.ui_obj.comboBox_WTG_I.currentText())
+        return irr_i, pot_i
+
+    def GetTpanelxCab(self):
+        inv_num = float(self.ui_obj.comboBox_WTG_I.currentText())
         #conseguir datos del pitch:
         #descargar 1er batch de pitch:
         #serie 1 -> mes a evaluar
@@ -450,12 +473,12 @@ class DegradaApp:
             end_d = datetime.datetime(anno_end_d, mes_end_d, 1, 0)
         else:
             end_d = datetime.datetime(self.ANNO_I, self.MES_I+1, 1, 0)
-        datos_pitch_I = []
-        datos_pitch_I_raw = self.Descargar_datos_Pitch(wtg_num, start_d, end_d)
+        #datos_pitch_I = []
+        datos_pitch_I_raw = self.Descargar_datos_TPanel(inv_num, start_d, end_d)
         wind_i, pot_i = self.Getcurva(wtg_num, self.MES_I, self.ANNO_I)
-        for data_blade in datos_pitch_I_raw:
+        #for data_blade in datos_pitch_I_raw:
             #print(np.array(list(zip(wind_i, data_blade)))) #[[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
-            datos_pitch_I.append(np.array(list(zip(wind_i, data_blade)))[:,1]) # [[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
+        datos_pitch_I = np.array(list(zip(wind_i, datos_pitch_I_raw)))[:,1] # [[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
         #serie 2:
         start_d = datetime.datetime(self.ANNO_J, self.MES_J, 1, 0)
         if self.MES_J==12:
@@ -464,12 +487,13 @@ class DegradaApp:
             end_d = datetime.datetime(anno_end_d, mes_end_d, 1, 0)
         else:
             end_d = datetime.datetime(self.ANNO_J, self.MES_J+1, 1, 0)
-        datos_pitch_J = []
-        datos_pitch_J_raw = self.Descargar_datos_Pitch(wtg_num, start_d, end_d)
+        #datos_pitch_J = []
+        datos_pitch_J_raw = self.Descargar_datos_TPanel(inv_num, start_d, end_d)
         wind_j, pot_j = self.Getcurva(wtg_num, self.MES_J, self.ANNO_J)
-        for data_blade in datos_pitch_J_raw:
-            #print(np.array(list(zip(wind_i, data_blade)))) #[[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
-            datos_pitch_J.append(np.array(list(zip(wind_j, data_blade)))[:,1])
+        datos_pitch_J = np.array(list(zip(wind_j, datos_pitch_J_raw)))[:,1]
+        #for data_blade in datos_pitch_J_raw:
+        #print(np.array(list(zip(wind_i, data_blade)))) #[[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
+        #    datos_pitch_J.append(np.array(list(zip(wind_j, data_blade)))[:,1])
 
         return datos_pitch_I, datos_pitch_J
 
@@ -488,16 +512,16 @@ class DegradaApp:
 
         ejex_name = self.ui_obj.comboBox_ejex.currentText()
         ejey_name = self.ui_obj.comboBox_ejey.currentText()
-        self.WTG_I = int(self.ui_obj.comboBox_WTG_I.currentText())
+        self.WTG_I = float(self.ui_obj.comboBox_WTG_I.currentText())
 
-        WTG_IDX_act = self.WTG_I - 1
-        WTG_IDX_pst = self.WTG_J - 1
+        WTG_IDX_act = self.WTG_I
+        WTG_IDX_pst = self.WTG_I
 
         wind_data_i, pot_data_i = self.Getcurva(WTG_IDX_act, self.MES_I, self.ANNO_I)
         wind_data_j, pot_data_j = self.Getcurva(WTG_IDX_pst, self.MES_J, self.ANNO_J)
 
-        pitch_data_i, pitch_data_j = self.GetPitchxWTG()
-        pala_num = int(self.ui_obj.comboBox_pala.currentText())-1
+        Tpanel_data_i, Tpanel_data_j = self.GetTpanelxCab()
+        #pala_num = int(self.ui_obj.comboBox_pala.currentText())-1
         idx = 0
 
         if ejex_name=='Velocidad':
@@ -515,18 +539,18 @@ class DegradaApp:
             ejey_data_i = pot_data_i
             ejey_data_j = pot_data_j
 
-        if ejex_name=='Pitch':
-            ejex_data_i = pitch_data_i[pala_num] #Lista
-            ejex_data_j = pitch_data_j[pala_num]
+        if ejex_name=='Temp. Panel':
+            ejex_data_i = Tpanel_data_i
+            ejex_data_j = Tpanel_data_j
 
-        if ejey_name=='Pitch':
-            ejey_data_i = pitch_data_i[pala_num]
-            ejey_data_j = pitch_data_j[pala_num]
+        if ejey_name=='Temp. Panel':
+            ejey_data_i = Tpanel_data_i
+            ejey_data_j = Tpanel_data_j
 
         axs.scatter(ejex_data_j, ejey_data_j, color=COLOR_2, s=2, alpha=.4,
-                    label=f'S1: WTG {self.WTG_I} - Mes {self.MES_J}/{self.ANNO_J}') # J
+                    label=f'S1: INV {self.WTG_I} - Mes {self.MES_J}/{self.ANNO_J}') # J
         axs.scatter(ejex_data_i, ejey_data_i, color=COLOR_1, s=2, alpha=.4,
-                    label=f'S2: WTG {self.WTG_I} - Mes {self.MES_I}/{self.ANNO_I}') # I
+                    label=f'S2: INV {self.WTG_I} - Mes {self.MES_I}/{self.ANNO_I}') # I
 
 
         #axs.set_ylim([0,700])
@@ -542,15 +566,15 @@ class DegradaApp:
 
     def GraficaCurvas_IZQ(self):
 
-        self.WTG_I = int(self.ui_obj.comboBox_WTG_I.currentText())
+        self.WTG_I = float(self.ui_obj.comboBox_WTG_I.currentText())
         if self.ui_obj.checkBox_BLOQUEAR.isChecked():
             self.WTG_J = self.WTG_I
-            self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.WTG_LIST==self.WTG_I)[0][0])
+            self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==self.WTG_I)[0][0])
         else:
-            self.WTG_J = int(self.ui_obj.comboBox_WTG_J.currentText())
+            self.WTG_J = float(self.ui_obj.comboBox_WTG_J.currentText())
 
-        WTG_IDX_act = self.WTG_I - 1
-        WTG_IDX_pst = self.WTG_J - 1
+        WTG_IDX_act = self.WTG_I
+        WTG_IDX_pst = self.WTG_J
 
         data_act = self.Getcurva(WTG_IDX_act, self.MES_I, self.ANNO_I)
         data_past = self.Getcurva(WTG_IDX_pst, self.MES_J, self.ANNO_J)
@@ -585,23 +609,23 @@ class DegradaApp:
         axs.scatter(data_act[0], data_act[1], color=COLOR_1, s=1.5, alpha=.4)
 
         axs.plot(curva_y2[0], curva_y2[1], color=COLOR_2_alt, alpha=.75,
-                    label=f'S1: WTG {self.WTG_J} - Mes {self.MES_J}/{self.ANNO_J}')
+                    label=f'S1: INV {self.WTG_J} - Mes {self.MES_J}/{self.ANNO_J}')
         axs.plot(curva_y1[0], curva_y1[1], color=COLOR_1_alt, alpha=.75,
-                    label=f'S2: WTG {self.WTG_I} - Mes {self.MES_I}/{self.ANNO_I}')
+                    label=f'S2: INV {self.WTG_I} - Mes {self.MES_I}/{self.ANNO_I}')
 
-        axs.plot([point_1[0], point_1[0]], [0, point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
-        axs.plot([0, point_1[0]], [ point_1[1], point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
-        axs.plot([point_2[0], point_2[0]], [0, point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
-        axs.plot([0, point_2[0]], [ point_2[1], point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
+        #axs.plot([point_1[0], point_1[0]], [0, point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
+        #axs.plot([0, point_1[0]], [ point_1[1], point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
+        #axs.plot([point_2[0], point_2[0]], [0, point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
+        #axs.plot([0, point_2[0]], [ point_2[1], point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
 
-        axs.text(x=0, y=2500, s=f''' S1: ({round(point_2[0],2)},  {round(point_2[1],2)})\n S2: ({round(point_1[0],2)},  {round(point_1[1],2)})''',
+        axs.text(x=0, y=800, s=f''' S1: ({round(point_2[0],2)},  {round(point_2[1],2)})\n S2: ({round(point_1[0],2)},  {round(point_1[1],2)})''',
                 fontsize=9)
 
-        axs.set_ylim([0,3500])
-        axs.set_xlim([0,18])
-        axs.set_xticks(range(0,19,2))
-        axs.set_yticks(range(0,3500,500))
-        axs.set_xlabel('Velocidad de viento [m/s]', color='black', size=10)
+        axs.set_ylim([0,1300])
+        axs.set_xlim([0,1300])
+        axs.set_xticks(range(0,1300,100))
+        axs.set_yticks(range(0,1300,100))
+        axs.set_xlabel('Irradiancia', color='black', size=10)
         axs.set_ylabel('Potencia [KW]', color='black', size=10)
 
         axs.legend(loc='lower right', fontsize=9)
@@ -618,7 +642,7 @@ class DegradaApp:
     def ItemTabla_clicked(self, clickedIndex):
         row=clickedIndex.row()
         wtg_selected = int(self.df_summ.iloc[row,0])
-        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.WTG_LIST==wtg_selected)[0][0])
+        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.INV_LIST==wtg_selected)[0][0])
         self.GraficaCurvas_IZQ()
 
     def ActualizarDatos_PI(self):
@@ -679,25 +703,25 @@ class DegradaApp:
         self.wind_arr = self.df_wind.to_numpy()
 
         #self.PIR_NUM = 1
-    def Descargar_datos_Pitch(self, wtg_num, start_d, end_d):
+    def Descargar_datos_TPanel(self, wtg_num, start_d, end_d):
         #son 3 angulos p/wtg:
-        self.df_tags_pitch = pd.read_excel('./dataset/wayra_tag_ref.xlsx', sheet_name='pitch')
-        self.df_tags_pitch['wtg_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('MWTG')[1].split('.')[0]))
-        self.df_tags_pitch['blade_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('Pth')[1].split('AngVal')[0]))
+        self.df_tags_pitch = pd.read_excel('./dataset/rubi_tag_ref.xlsx', sheet_name='temp_panel')
+        self.df_tags_pitch['cab_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('chnRUBI50.')[1].split('.')[0]))
+        #self.df_tags_pitch['blade_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('Pth')[1].split('AngVal')[0]))
         #Lista de tags de pitch correspondientes a la turbina seleccionada wtg_num
-        self.lista_tags_pitch = self.df_tags_pitch[self.df_tags_pitch['wtg_id']==wtg_num].iloc[:,1].to_list()
-        datos_pitch = [] #3 arreglos x turbina
+        self.lista_tags_pitch = self.df_tags_pitch[self.df_tags_pitch['cab_id']==int(wtg_num//1)].iloc[:,1]
+        #datos_pitch = [] #3 arreglos x turbina
         with PI.PIServer(server=self.PI_SERVER, username=self.PI_USER, password=self.PI_PASS,
             authentication_mode=AuthenticationMode.WINDOWS_AUTHENTICATION) as server:
             #avance:
-            for tag_name in self.lista_tags_pitch: #3 tag's x turbina
-                query = server.search(tag_name)
-                #print(query)
-                pit_data_i = query[0].interpolated_values(start_d, end_d, self.INTERVAL)
-                pit_data_i = pit_data_i.to_numpy() # 1, 100, np.nan,
-                pit_data_i = pd.to_numeric(pit_data_i, errors='coerce')
-                datos_pitch.append(pit_data_i)
-        return datos_pitch
+            #for tag_name in self.lista_tags_pitch: #3 tag's x turbina
+            query = server.search(self.lista_tags_pitch)
+            #print(query)
+            pit_data_i = query[0].interpolated_values(start_d, end_d, self.INTERVAL)
+            pit_data_i = pit_data_i.to_numpy() # 1, 100, np.nan,
+            pit_data_i = pd.to_numeric(pit_data_i, errors='coerce')
+                #datos_pitch.append(pit_data_i)
+        return pit_data_i
 
     def SetupPI(self):
         PI.PIConfig.DEFAULT_TIMEZONE = 'Etc/GMT+5'
@@ -774,7 +798,7 @@ class DegradaApp:
         if self.ui_obj.checkBox_BLOQUEAR.isChecked():
             #self.WTG_J = self.WTG_I
             self.ui_obj.comboBox_WTG_J.setEnabled(False)
-            #self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.WTG_LIST==self.WTG_I)[0][0])
+            #self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==self.WTG_I)[0][0])
         else:
             self.ui_obj.comboBox_WTG_J.setEnabled(True)
             #self.WTG_J = int(self.ui_obj.comboBox_WTG_J.currentText())
@@ -829,14 +853,14 @@ class DegradaApp:
         self.ui_obj.comboBox_MES_J.setCurrentIndex(np.where(self.MONTH_LIST == self.MES_J)[0][0])
         #self.ui_obj.comboBox_MES_J.activated.connect(self.ActualizaFechas)
 
-        self.ui_obj.comboBox_WTG_I.addItems([str(x) for x in self.WTG_LIST])
+        self.ui_obj.comboBox_WTG_I.addItems([str(x) for x in self.INV_LIST])
         self.ui_obj.comboBox_WTG_I.activated.connect(self.GraficaCurvas_IZQ)
 
-        self.ui_obj.comboBox_WTG_J.addItems([str(x) for x in self.WTG_LIST])
+        self.ui_obj.comboBox_WTG_J.addItems([str(x) for x in self.INV_LIST])
         self.ui_obj.comboBox_WTG_J.activated.connect(self.GraficaCurvas_IZQ)
 
-        self.ui_obj.comboBox_wtg.addItems([str(x) for x in self.WTG_LIST])
-        #self.ui_obj.comboBox_wtg.activated.connect(self.GraficaCurvas_IZQ)
+        #self.ui_obj.lineEdit_inv.addItems([str(x) for x in self.INV_LIST])
+        #self.ui_obj.lineEdit_inv.activated.connect(self.GraficaCurvas_IZQ)
         self.ui_obj.comboBox_pala.addItems([str(x) for x in range(1,4)])
         #self.ui_obj.comboBox_MES_J.activated.connect(self.ActualizaFechas)
 
@@ -845,9 +869,9 @@ class DegradaApp:
         self.ui_obj.comboBox_ANNO_I_GR.addItems([str(x) for x in self.YEAR_LIST])
         self.ui_obj.comboBox_ANNO_J_GR.addItems([str(x) for x in self.YEAR_LIST])
 
-        self.lista_ejey = ['Potencia', 'Velocidad']
-        self.lista_ejex = ['Potencia', 'Velocidad']
-        self.df_tags_names = pd.read_excel('./dataset/wayra_tag_ref.xlsx', sheet_name=0)
+        self.lista_ejey = ['Potencia', 'Irradiancia']
+        self.lista_ejex = ['Potencia', 'Irradiancia']
+        self.df_tags_names = pd.read_excel('./dataset/rubi_tag_ref.xlsx', sheet_name=0)
         self.lista_ejey.extend(self.df_tags_names.iloc[:,0].to_list())
         self.lista_ejex.extend(self.df_tags_names.iloc[:,0].to_list())
         self.ui_obj.comboBox_ejey.addItems(self.lista_ejey)

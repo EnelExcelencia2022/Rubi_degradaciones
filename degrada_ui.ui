@@ -794,7 +794,7 @@
             <string>Año:</string>
            </property>
           </widget>
-          <widget class="QLineEdit" name="lineEdit">
+          <widget class="QLineEdit" name="lineEdit_inv">
            <property name="geometry">
             <rect>
              <x>210</x>
@@ -802,6 +802,15 @@
              <width>71</width>
              <height>31</height>
             </rect>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="placeholderText">
+            <string>1.1</string>
            </property>
           </widget>
          </widget>

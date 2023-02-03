@@ -263,9 +263,11 @@ class Ui_MainWindow(object):
         self.label_14 = QtWidgets.QLabel(self.frame)
         self.label_14.setGeometry(QtCore.QRect(300, 120, 55, 16))
         self.label_14.setObjectName("label_14")
-        self.lineEdit = QtWidgets.QLineEdit(self.frame)
-        self.lineEdit.setGeometry(QtCore.QRect(210, 60, 71, 31))
-        self.lineEdit.setObjectName("lineEdit")
+        self.lineEdit_inv = QtWidgets.QLineEdit(self.frame)
+        self.lineEdit_inv.setGeometry(QtCore.QRect(210, 60, 71, 31))
+        self.lineEdit_inv.setText("")
+        self.lineEdit_inv.setAlignment(QtCore.Qt.AlignCenter)
+        self.lineEdit_inv.setObjectName("lineEdit_inv")
         self.verticalLayout_2.addWidget(self.frame)
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
         self.verticalLayout.addWidget(self.scrollArea)
@@ -314,6 +316,7 @@ class Ui_MainWindow(object):
         self.label_10.setText(_translate("MainWindow", "/"))
         self.label_7.setText(_translate("MainWindow", "Mes:"))
         self.label_14.setText(_translate("MainWindow", "Año:"))
+        self.lineEdit_inv.setPlaceholderText(_translate("MainWindow", "1.1"))
 
 
 if __name__ == "__main__":
