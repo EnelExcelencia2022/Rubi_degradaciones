@@ -139,8 +139,8 @@ class DegradaApp:
         print('Cargando datos')
         self.ui_obj = ui_obj
         self.usuario_logeado = False
-        self.df_pot = pd.read_csv('./dataset/potencia_rubi.csv', index_col=0, parse_dates=True)
-        self.df_wind = pd.read_csv('./dataset/irradiancia_rubi.csv', index_col=0, parse_dates=True)
+        self.df_pot = pd.read_pickle('./dataset/potencia_rubi.pk')
+        self.df_wind = pd.read_pickle('./dataset/irradiancia_rubi.pk')
 
         # self.df_pot['Mes'] = self.df_pot.index.to_series().apply(lambda x: x.month)
         # self.df_pot['Anno'] = self.df_pot.index.to_series().apply(lambda x: x.year)
@@ -460,7 +460,24 @@ class DegradaApp:
         irr_i = self.wind_arr[mascara_wnd_i, cab_idx]
 
         return irr_i, pot_i
+    def DescargaDataExtra(self, filename):
+        print(filename.values[0])
+        df = pd.read_excel(f'dataset/{filename.values[0]}', index_col=0, parse_dates=True)
+        df = self.TransformaDF(df)
+        df['Mes'] = df.index.to_series().apply(lambda x: x.month)
+        df['Anno'] = df.index.to_series().apply(lambda x: x.year)
+        return df
 
+    def GetDataInversor(self, df, inv_num, mes, anno):
+        df_numpy = df.to_numpy()
+        mascara_extra = (df_numpy[:,self.mes_idx]==mes) * (df_numpy[:,self.anno_idx]==anno)
+        inv_dx = np.where(self.INV_LIST==inv_num)[0][0]
+        return df_numpy[mascara_extra, inv_dx]
+
+    def GetFILENAME(self, nombre_var):
+        #print(self.df_tags_names.iloc[self.df_tags_names.iloc[:,0]==nombre_var,2])
+        print(nombre_var)
+        return self.df_tags_names.loc[self.df_tags_names.iloc[:,0]==nombre_var,].iloc[:,2].values[0]
     def GetTpanelxCab(self):
         inv_num = float(self.ui_obj.comboBox_WTG_I.currentText())
         #conseguir datos del pitch:
@@ -475,7 +492,7 @@ class DegradaApp:
             end_d = datetime.datetime(self.ANNO_I, self.MES_I+1, 1, 0)
         #datos_pitch_I = []
         datos_pitch_I_raw = self.Descargar_datos_TPanel(inv_num, start_d, end_d)
-        wind_i, pot_i = self.Getcurva(wtg_num, self.MES_I, self.ANNO_I)
+        wind_i, pot_i = self.Getcurva(inv_num, self.MES_I, self.ANNO_I)
         #for data_blade in datos_pitch_I_raw:
             #print(np.array(list(zip(wind_i, data_blade)))) #[[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
         datos_pitch_I = np.array(list(zip(wind_i, datos_pitch_I_raw)))[:,1] # [[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
@@ -489,7 +506,7 @@ class DegradaApp:
             end_d = datetime.datetime(self.ANNO_J, self.MES_J+1, 1, 0)
         #datos_pitch_J = []
         datos_pitch_J_raw = self.Descargar_datos_TPanel(inv_num, start_d, end_d)
-        wind_j, pot_j = self.Getcurva(wtg_num, self.MES_J, self.ANNO_J)
+        wind_j, pot_j = self.Getcurva(inv_num, self.MES_J, self.ANNO_J)
         datos_pitch_J = np.array(list(zip(wind_j, datos_pitch_J_raw)))[:,1]
         #for data_blade in datos_pitch_J_raw:
         #print(np.array(list(zip(wind_i, data_blade)))) #[[wind, pitch], [wind, pitch], [wind, pitch], ..., [wind, pitch]]
@@ -498,14 +515,14 @@ class DegradaApp:
         return datos_pitch_I, datos_pitch_J
 
     def GraficaCurvas_DER(self):
-        if not(self.usuario_logeado):
-            self.MostrarDialogo()
+        #if not(self.usuario_logeado):
+        #    self.MostrarDialogo()
         self.figure2.clear()
         # create an axis
         axs = self.figure2.add_subplot(111)
         #fig, axs = plt.subplots(figsize=(8,6))
-        COLOR_1 = 'tab:red'
-        COLOR_2 = 'tab:blue'
+        COLOR_1 = 'tab:red' #S2, I
+        COLOR_2 = 'tab:blue' #S1, J
 
         COLOR_1_alt = 'red'
         COLOR_2_alt = 'blue'
@@ -520,36 +537,50 @@ class DegradaApp:
         wind_data_i, pot_data_i = self.Getcurva(WTG_IDX_act, self.MES_I, self.ANNO_I)
         wind_data_j, pot_data_j = self.Getcurva(WTG_IDX_pst, self.MES_J, self.ANNO_J)
 
-        Tpanel_data_i, Tpanel_data_j = self.GetTpanelxCab()
+        #Tpanel_data_i, Tpanel_data_j = self.GetTpanelxCab()
         #pala_num = int(self.ui_obj.comboBox_pala.currentText())-1
-        idx = 0
+        #idx = 0
 
-        if ejex_name=='Velocidad':
+        if ejex_name=='Irradiancia':
             ejex_data_i = wind_data_i
             ejex_data_j = wind_data_j
         elif ejex_name=='Potencia':
             ejex_data_i = pot_data_i
             ejex_data_j = pot_data_j
+        else:
+            FILENAME = self.GetFILENAME(ejex_name)
+            df_extra = pd.read_pickle(f'dataset/{FILENAME}')
+            ejex_data_i = self.GetDataInversor(df_extra, self.WTG_I, self.MES_I, self.ANNO_I)
+            ejex_data_j = self.GetDataInversor(df_extra, self.WTG_I, self.MES_J, self.ANNO_J)
 
-
-        if ejey_name=='Velocidad':
+        if ejey_name=='Irradiancia':
             ejey_data_i = wind_data_i
             ejey_data_j = wind_data_j
         elif ejey_name=='Potencia':
             ejey_data_i = pot_data_i
             ejey_data_j = pot_data_j
 
-        if ejex_name=='Temp. Panel':
-            ejex_data_i = Tpanel_data_i
-            ejex_data_j = Tpanel_data_j
+        else:
+            FILENAME = self.GetFILENAME(ejey_name)
+            df_extra = pd.read_pickle(f'dataset/{FILENAME}')
+            ejey_data_i = self.GetDataInversor(df_extra, self.WTG_I, self.MES_I, self.ANNO_I)
+            ejey_data_j = self.GetDataInversor(df_extra, self.WTG_I, self.MES_J, self.ANNO_J)
 
-        if ejey_name=='Temp. Panel':
-            ejey_data_i = Tpanel_data_i
-            ejey_data_j = Tpanel_data_j
 
-        axs.scatter(ejex_data_j, ejey_data_j, color=COLOR_2, s=2, alpha=.4,
+        # if ejex_name=='Temp. Panel':
+        #     ejex_data_i = Tpanel_data_i
+        #     ejex_data_j = Tpanel_data_j
+        #
+        # if ejey_name=='Temp. Panel':
+        #     ejey_data_i = Tpanel_data_i
+        #     ejey_data_j = Tpanel_data_j
+        data_zipped_i = np.array(list(zip(ejex_data_i, ejey_data_i)))
+        data_zipped_j = np.array(list(zip(ejex_data_j, ejey_data_j)))
+
+
+        axs.scatter(data_zipped_j[:,0], data_zipped_j[:,1], color=COLOR_2, s=2, alpha=.4,
                     label=f'S1: INV {self.WTG_I} - Mes {self.MES_J}/{self.ANNO_J}') # J
-        axs.scatter(ejex_data_i, ejey_data_i, color=COLOR_1, s=2, alpha=.4,
+        axs.scatter(data_zipped_i[:,0], data_zipped_i[:,1], color=COLOR_1, s=2, alpha=.4,
                     label=f'S2: INV {self.WTG_I} - Mes {self.MES_I}/{self.ANNO_I}') # I
 
 
@@ -623,8 +654,8 @@ class DegradaApp:
 
         axs.set_ylim([0,1300])
         axs.set_xlim([0,1300])
-        axs.set_xticks(range(0,1300,100))
-        axs.set_yticks(range(0,1300,100))
+        axs.set_xticks(range(0,1300,200))
+        axs.set_yticks(range(0,1300,200))
         axs.set_xlabel('Irradiancia', color='black', size=10)
         axs.set_ylabel('Potencia [KW]', color='black', size=10)
 
@@ -653,51 +684,79 @@ class DegradaApp:
         self.now_datetime = datetime.datetime.now()
 
         wtg_pot_list = []
-        wtg_win_list = []
+        sheet_names = self.df_tags_names.iloc[:,1]
+        tags_variables = []
+        arch_names = self.df_tags_names.iloc[:,2]
+        #variables = []
+        for work_sheet in sheet_names:
+            df_ws = pd.read_excel('dataset/rubi_tag_ref.xlsx', sheet_name=work_sheet)
+            tags_variables.append(df_ws.iloc[:,1].to_list())
 
         with PI.PIServer(server=self.PI_SERVER, username=self.PI_USER, password=self.PI_PASS,
                         authentication_mode=AuthenticationMode.WINDOWS_AUTHENTICATION) as server:
             #tag:
             #Descargar datos de potencia:
-            for tag_name in self.pot_tags:
-                query = server.search(tag_name)
-                #print(query)
-                pot_data_i = query[0].interpolated_values(self.Last_update, self.now_datetime, self.INTERVAL)
-                wtg_pot_list.append(pot_data_i)
+            for idx, var_i in enumerate(tags_variables):
+                data_inv = []
+                for tag_i in var_i:
+                    query = server.search(tag_i)
+                    data_i = query[0].interpolated_values(self.Last_update, self.now_datetime, self.INTERVAL)
+                    data_inv.append(data_i)
 
-            for tag_name in self.wind_tags:
-                query = server.search(tag_name)
-                #print(query)
-                win_data_i = query[0].interpolated_values(self.Last_update, self.now_datetime, self.INTERVAL)
-                wtg_win_list.append(win_data_i)
+                df_new = pd.DataFrame(data_inv).T.iloc[1:,:]
 
-        df_pot_new = pd.DataFrame(wtg_pot_list).T.iloc[1:,:]
+                df_new['Mes'] = df_new.index.to_series().apply(lambda x: x.month)
+                df_new['Anno'] = df_new.index.to_series().apply(lambda x: x.year)
+                df_new = self.TransformaDF(df_new)
+                df_new = df_new.apply(self.EliminaErrores, axis=1)
+                df_new[['Mes','Anno']] = df_new[['Mes','Anno']].astype('int')
+                df_old = pd.read_pickle(f'dataset/{arch_names[idx]}')
+                df_new = pd.concat([df_old, df_new])
 
-        df_pot_new['Mes'] = df_pot_new.index.to_series().apply(lambda x: x.month)
-        df_pot_new['Anno'] = df_pot_new.index.to_series().apply(lambda x: x.year)
-        df_pot_new = self.TransformaDF(df_pot_new)
-        df_pot_new = df_pot_new.apply(self.EliminaErrores, axis=1)
-        df_pot_new[['Anno','Mes']] = df_pot_new[['Anno','Mes']].astype('int')
-
-        self.df_pot = pd.concat([self.df_pot, df_pot_new])
-
-
-        df_win_new = pd.DataFrame(wtg_win_list).T.iloc[1:,:]
-
-        df_win_new['Mes'] = df_win_new.index.to_series().apply(lambda x: x.month)
-        df_win_new['Anno'] = df_win_new.index.to_series().apply(lambda x: x.year)
-        df_win_new = self.TransformaDF(df_win_new)
-        df_win_new = df_win_new.apply(self.EliminaErrores, axis=1)
-        df_win_new[['Anno','Mes']] = df_win_new[['Anno','Mes']].astype('int')
-
-        self.df_wind = pd.concat([self.df_wind, df_win_new])
-
-        fecha_min = self.df_pot.index.min().strftime('%d/%m/%Y')
-        fecha_max = self.df_pot.index.max().strftime('%d/%m/%Y')
-        self.ui_obj.lbl_actual.setText(f'Datos actualizados desde {fecha_min} al {fecha_max}')
-
-        self.df_pot.to_pickle('./dataset/data_potencia.pkl')
-        self.df_wind.to_pickle('./dataset/data_viento.pkl')
+                fecha_min = self.df_pot.index.min().strftime('%d/%m/%Y')
+                fecha_max = self.df_pot.index.max().strftime('%d/%m/%Y')
+                self.ui_obj.lbl_actual.setText(f'Datos actualizados desde {fecha_min} al {fecha_max}')
+                df_new.drop_duplicates(inplace=True)
+                df_new.to_pickle(f'./dataset/{arch_names[idx]}')
+        self.df_pot = pd.read_pickle('./dataset/potencia_rubi.pk')
+        self.df_wind = pd.read_pickle('./dataset/irradiancia_rubi.pk')
+        #
+        #
+        #
+        #
+        #     for tag_name in self.wind_tags:
+        #         query = server.search(tag_name)
+        #         #print(query)
+        #         win_data_i = query[0].interpolated_values(self.Last_update, self.now_datetime, self.INTERVAL)
+        #         wtg_win_list.append(win_data_i)
+        #
+        # df_pot_new = pd.DataFrame(wtg_pot_list).T.iloc[1:,:]
+        #
+        # df_pot_new['Mes'] = df_pot_new.index.to_series().apply(lambda x: x.month)
+        # df_pot_new['Anno'] = df_pot_new.index.to_series().apply(lambda x: x.year)
+        # df_pot_new = self.TransformaDF(df_pot_new)
+        # df_pot_new = df_pot_new.apply(self.EliminaErrores, axis=1)
+        # df_pot_new[['Anno','Mes']] = df_pot_new[['Anno','Mes']].astype('int')
+        #
+        # self.df_pot = pd.concat([self.df_pot, df_pot_new])
+        #
+        #
+        # df_win_new = pd.DataFrame(wtg_win_list).T.iloc[1:,:]
+        #
+        # df_win_new['Mes'] = df_win_new.index.to_series().apply(lambda x: x.month)
+        # df_win_new['Anno'] = df_win_new.index.to_series().apply(lambda x: x.year)
+        # df_win_new = self.TransformaDF(df_win_new)
+        # df_win_new = df_win_new.apply(self.EliminaErrores, axis=1)
+        # df_win_new[['Anno','Mes']] = df_win_new[['Anno','Mes']].astype('int')
+        #
+        # self.df_wind = pd.concat([self.df_wind, df_win_new])
+        #
+        # fecha_min = self.df_pot.index.min().strftime('%d/%m/%Y')
+        # fecha_max = self.df_pot.index.max().strftime('%d/%m/%Y')
+        # self.ui_obj.lbl_actual.setText(f'Datos actualizados desde {fecha_min} al {fecha_max}')
+        #
+        # self.df_pot.to_pickle('./dataset/data_potencia.pkl')
+        # self.df_wind.to_pickle('./dataset/data_viento.pkl')
 
         self.pot_arr = self.df_pot.to_numpy()
         self.wind_arr = self.df_wind.to_numpy()
@@ -709,14 +768,15 @@ class DegradaApp:
         self.df_tags_pitch['cab_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('chnRUBI50.')[1].split('.')[0]))
         #self.df_tags_pitch['blade_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('Pth')[1].split('AngVal')[0]))
         #Lista de tags de pitch correspondientes a la turbina seleccionada wtg_num
-        self.lista_tags_pitch = self.df_tags_pitch[self.df_tags_pitch['cab_id']==int(wtg_num//1)].iloc[:,1]
+        self.lista_tags_pitch = self.df_tags_pitch[self.df_tags_pitch['cab_id']==int(wtg_num//1)].iloc[:,1][0]
+        print(self.lista_tags_pitch)
         #datos_pitch = [] #3 arreglos x turbina
         with PI.PIServer(server=self.PI_SERVER, username=self.PI_USER, password=self.PI_PASS,
             authentication_mode=AuthenticationMode.WINDOWS_AUTHENTICATION) as server:
             #avance:
             #for tag_name in self.lista_tags_pitch: #3 tag's x turbina
             query = server.search(self.lista_tags_pitch)
-            #print(query)
+            print(query)
             pit_data_i = query[0].interpolated_values(start_d, end_d, self.INTERVAL)
             pit_data_i = pit_data_i.to_numpy() # 1, 100, np.nan,
             pit_data_i = pd.to_numeric(pit_data_i, errors='coerce')
@@ -861,7 +921,7 @@ class DegradaApp:
 
         #self.ui_obj.lineEdit_inv.addItems([str(x) for x in self.INV_LIST])
         #self.ui_obj.lineEdit_inv.activated.connect(self.GraficaCurvas_IZQ)
-        self.ui_obj.comboBox_pala.addItems([str(x) for x in range(1,4)])
+        #self.ui_obj.comboBox_pala.addItems([str(x) for x in range(1,4)])
         #self.ui_obj.comboBox_MES_J.activated.connect(self.ActualizaFechas)
 
         self.ui_obj.comboBox_MES_I_GR.addItems([str(x) for x in self.MONTH_LIST])
@@ -869,13 +929,14 @@ class DegradaApp:
         self.ui_obj.comboBox_ANNO_I_GR.addItems([str(x) for x in self.YEAR_LIST])
         self.ui_obj.comboBox_ANNO_J_GR.addItems([str(x) for x in self.YEAR_LIST])
 
-        self.lista_ejey = ['Potencia', 'Irradiancia']
-        self.lista_ejex = ['Potencia', 'Irradiancia']
+        #self.lista_ejey = ['Potencia', 'Irradiancia']
+        #self.lista_ejex = ['Potencia', 'Irradiancia']
+        self.lista_variables = []
         self.df_tags_names = pd.read_excel('./dataset/rubi_tag_ref.xlsx', sheet_name=0)
-        self.lista_ejey.extend(self.df_tags_names.iloc[:,0].to_list())
-        self.lista_ejex.extend(self.df_tags_names.iloc[:,0].to_list())
-        self.ui_obj.comboBox_ejey.addItems(self.lista_ejey)
-        self.ui_obj.comboBox_ejex.addItems(self.lista_ejex)
+        self.lista_variables.extend(self.df_tags_names.iloc[:,0].to_list())
+        #self.lista_ejex.extend(self.df_tags_names.iloc[:,0].to_list())
+        self.ui_obj.comboBox_ejey.addItems(self.lista_variables)
+        self.ui_obj.comboBox_ejex.addItems(self.lista_variables)
 
         self.ui_obj.progressBar.setValue(0)
 
@@ -899,7 +960,7 @@ class DegradaApp:
 
         self.figure = plt.figure(figsize=(5, 5), dpi=100, layout='tight')
         self.canvas = FigureCanvas(self.figure)
-        self.toolbar1 = NavigationToolbar(self.canvas, self.mainwindow)
+        #self.toolbar1 = NavigationToolbar(self.canvas, self.mainwindow)
         #self.ui_obj.verticalLayout_izq.addWidget(self.toolbar1)
         self.ui_obj.verticalLayout_izq.addWidget(self.canvas)
 

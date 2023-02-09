@@ -683,35 +683,6 @@
             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
            </property>
           </widget>
-          <widget class="QComboBox" name="comboBox_pala">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-           <property name="geometry">
-            <rect>
-             <x>942</x>
-             <y>380</y>
-             <width>51</width>
-             <height>22</height>
-            </rect>
-           </property>
-          </widget>
-          <widget class="QLabel" name="label_pala">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-           <property name="geometry">
-            <rect>
-             <x>900</x>
-             <y>380</y>
-             <width>41</width>
-             <height>21</height>
-            </rect>
-           </property>
-           <property name="text">
-            <string>Pala:</string>
-           </property>
-          </widget>
           <widget class="QLabel" name="label_11">
            <property name="geometry">
             <rect>
