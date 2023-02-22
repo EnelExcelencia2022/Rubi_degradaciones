@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '.\degrada_ui.ui'
+# Form implementation generated from reading ui file 'degrada_ui.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.4
 #
@@ -51,7 +51,7 @@ class Ui_MainWindow(object):
         self.pushButton_ACTUALIZAR.setWhatsThis("")
         self.pushButton_ACTUALIZAR.setText("")
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("D:/OneDrive - ITALTEL PERU SAC/Escritorio/566023-901529706.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("566023-901529706.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.pushButton_ACTUALIZAR.setIcon(icon)
         self.pushButton_ACTUALIZAR.setObjectName("pushButton_ACTUALIZAR")
         self.lbl_actual = QtWidgets.QLabel(self.frame)
@@ -257,7 +257,6 @@ class Ui_MainWindow(object):
         self.label_14.setObjectName("label_14")
         self.lineEdit_inv = QtWidgets.QLineEdit(self.frame)
         self.lineEdit_inv.setGeometry(QtCore.QRect(210, 60, 71, 31))
-        self.lineEdit_inv.setText("")
         self.lineEdit_inv.setAlignment(QtCore.Qt.AlignCenter)
         self.lineEdit_inv.setObjectName("lineEdit_inv")
         self.verticalLayout_2.addWidget(self.frame)
@@ -277,16 +276,16 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "Rubi - curvas"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Jaguito - curvas"))
         self.lbl_actual.setText(_translate("MainWindow", "TextLabel"))
         self.label_2.setText(_translate("MainWindow", "Actualizar datos"))
         self.pushButton_EJECUTAR.setText(_translate("MainWindow", "Ejecutar"))
-        self.label.setText(_translate("MainWindow", "WTG:"))
+        self.label.setText(_translate("MainWindow", "INV:"))
         self.label_4.setText(_translate("MainWindow", "AÑO:"))
         self.label_5.setText(_translate("MainWindow", "vs"))
         self.label_6.setText(_translate("MainWindow", "AÑO:"))
-        self.label_8.setText(_translate("MainWindow", "WTG:"))
-        self.label_9.setText(_translate("MainWindow", "Turbinas con mayor desplazamiento entre mes base y mes eval:"))
+        self.label_8.setText(_translate("MainWindow", "INV:"))
+        self.label_9.setText(_translate("MainWindow", "Inversores con mayor degradación entre mes base y mes eval:"))
         self.checkBox_BLOQUEAR.setText(_translate("MainWindow", "bloquear"))
         self.label_13.setText(_translate("MainWindow", "/"))
         self.label_12.setText(_translate("MainWindow", "Mes base:"))

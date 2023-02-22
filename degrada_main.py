@@ -22,6 +22,7 @@ from sklearn.svm import SVR
 from sklearn.preprocessing import StandardScaler
 
 import pickle as pk
+import configparser
 import os
 
 import time
@@ -118,7 +119,7 @@ class CustomDialog(QDialog):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("HELLO!")
+        self.setWindowTitle("PI Login")
 
         QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
 
@@ -139,8 +140,10 @@ class DegradaApp:
         print('Cargando datos')
         self.ui_obj = ui_obj
         self.usuario_logeado = False
-        self.df_pot = pd.read_pickle('./dataset/potencia_rubi.pk')
-        self.df_wind = pd.read_pickle('./dataset/irradiancia_rubi.pk')
+        self.config_file = configparser.ConfigParser()
+        self.config_file.read('config.ini')
+        self.df_pot = pd.read_pickle(self.config_file['DATOS']['potencia'])
+        self.df_wind = pd.read_pickle(self.config_file['DATOS']['irradiancia'])
 
         # self.df_pot['Mes'] = self.df_pot.index.to_series().apply(lambda x: x.month)
         # self.df_pot['Anno'] = self.df_pot.index.to_series().apply(lambda x: x.year)
@@ -166,20 +169,26 @@ class DegradaApp:
         #lista de meses:
         self.MONTH_LIST = np.sort(list(self.df_pot.loc[:,'Mes'].unique())).astype(int)
         #Lista de inversores:
-        inver_x_cab = list(range(1,5)) #inversores de 1 a 4
-        cab_totales = np.arange(1,42) #cabinas de 1 a 41
-        lista_inv = np.sort(np.repeat(cab_totales,len(inver_x_cab)), axis=None)
-        lista_inv = lista_inv + np.array(inver_x_cab*len(cab_totales))*.1
+        inver_x_cab = int(self.config_file['PLANTA']['inversoresxcab'])
+        list_inver_x_cab = list(range(1,inver_x_cab+1)) #inversores de 1 a 4
+        num_cabinas = int(self.config_file['PLANTA']['cabinas'])
+        cab_totales = np.arange(1,num_cabinas+1) #cabinas de 1 a 41
+        lista_inv = np.sort(np.repeat(cab_totales,inver_x_cab), axis=None)
+        lista_inv = lista_inv + np.array(list_inver_x_cab*num_cabinas)*.1
         #print(lista_inv)
         self.INV_LIST = lista_inv
         #MONTH_LIST, YEAR_LIST, INV_LIST
         #SELF.WTG_LIST = np.arange(1,42)
 
         #DEFAULT:
+
+        self.lim_date = datetime.datetime.strptime(self.config_file['DATOS']['inicio'],'%Y-%m-%d %H:%M')
+        self.df_pot = self.df_pot.loc[self.lim_date:,:]
+        self.df_wind = self.df_wind.loc[self.lim_date:,:]
         self.MES_I = datetime.datetime.now().month
         self.MES_J = datetime.datetime.now().month
         self.ANNO_I = datetime.datetime.now().year
-        self.ANNO_J = 2021
+        self.ANNO_J = self.lim_date.year
 
         #Reemplazar datos faltantes
         self.df_pot.fillna(0, inplace=True)
@@ -218,7 +227,7 @@ class DegradaApp:
         return serie1
 
     def CalculaLP(self, puntos_x, puntos_y):
-        df_ref = pd.read_excel('./dataset/rubi_pc_ref.xlsx')
+        df_ref = pd.read_excel(self.config_file['DATOS']['powercurve'])
         #df_inf = pd.read_excel('./dataset/rubi_pc_ref.xlsx', sheet_name='lowlim')
         # df_ref.drop_duplicates(inplace=True)
         # df_inf.drop_duplicates(inplace=True)
@@ -255,7 +264,7 @@ class DegradaApp:
         x_norm = scaler_x.fit_transform(x_arr)
         y_norm = scaler_y.fit_transform(y_arr).reshape(-1,)
 
-        modelo = SVR(kernel='rbf', C=50, epsilon=.001)
+        modelo = SVR(kernel='rbf', C=1, epsilon=.1)
         modelo.fit(x_norm, y_norm)
 
         x_test= np.linspace(60,1100,100)
@@ -264,12 +273,15 @@ class DegradaApp:
         y_hat_norm = modelo.predict(x_test_n)
         y_hat = scaler_y.inverse_transform(y_hat_norm.reshape(-1,1)).reshape(-1,)
 
-        d1 = np.gradient(y_hat, x_test.reshape(-1,))
-        d2 = np.gradient(d1, x_test.reshape(-1,))
+        #d1 = np.gradient(y_hat, x_test.reshape(-1,))
+        #d2 = np.gradient(d1, x_test.reshape(-1,))
 
-        point_codo = d2.argmin()
-        x_point = x_test[point_codo]
-        y_point = y_hat[point_codo]
+        #point_codo = d2.argmin()
+        #x_point = x_test[point_codo]
+        #y_point = y_hat[point_codo]
+        #Cuando y_hat==800
+        y_point= 800
+        x_point = np.interp(y_point, y_hat, x_test)
 
         curva_fit = np.array((x_test, y_hat))
         int_point = np.array([x_point, y_point])
@@ -277,6 +289,8 @@ class DegradaApp:
         return curva_fit, int_point
 
     def EjecutaDiferencias(self, Tupla_I, Tupla_J):
+        #Tuplas: (inv_num, mes, anno)
+        #Ej: (1.1, 10, 2022)
         wtg_i, mes_i, anno_i = Tupla_I[0], Tupla_I[1], Tupla_I[2] #inversor_num, mes, anno
         wtg_j, mes_j, anno_j = Tupla_J[0], Tupla_J[1], Tupla_J[2] #inversor_num, mes, anno
 
@@ -388,8 +402,8 @@ class DegradaApp:
         self.diff_chache_list = []
         self.diff_per_chache_list = []
 
-        output_dict = {'WTG':[],
-                       'delta Vel. [m/s]':[],
+        output_dict = {'INV':[],
+                       'delta Irr. [W/m2]':[],
                        'delta Degr. [%]':[]
                       #'delta Norma':[]
                       }
@@ -399,14 +413,14 @@ class DegradaApp:
 
         for wtg_idx, wtg_num in enumerate(self.INV_LIST):
             #Analisis:
-            tupla_1 = (wtg_idx, self.MES_I, self.ANNO_I)
-            tupla_2 = (wtg_idx, self.MES_J, self.ANNO_J)
+            tupla_1 = (wtg_num, self.MES_I, self.ANNO_I)
+            tupla_2 = (wtg_num, self.MES_J, self.ANNO_J)
             curva_y1, point_1, curva_y2, point_2, diff, diff_per = self.EjecutaDiferencias(tupla_1, tupla_2)
             #diff_pw = (point_1[1]-point_2[1])
             #diff_Norm = np.sqrt(diff_pw**2 + diff_pw**2)
             #diff_Norm = np.sign(diff_per)*diff_Norm
-            output_dict['WTG'].append(str(wtg_num))
-            output_dict['delta Vel. [m/s]'].append(round(diff,4))
+            output_dict['INV'].append(str(wtg_num))
+            output_dict['delta Irr. [W/m2]'].append(round(diff,4))
             output_dict['delta Degr. [%]'].append(round(diff_per,4))
             #output_dict['delta Norma'].append(round(diff_Norm,4))
 
@@ -433,12 +447,12 @@ class DegradaApp:
 
 
         self.df_summ = pd.DataFrame(output_dict)
-        self.df_summ.sort_values(self.df_summ.columns[1], ascending=False, inplace=True)
+        self.df_summ.sort_values(self.df_summ.columns[2], ascending=False, inplace=True)
         TABLA_model = PandasModel(self.df_summ)
         self.ui_obj.tableView_TABLA.setModel(TABLA_model)
 
-        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.INV_LIST==int(self.df_summ.iloc[0,0]))[0][0])
-        self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==int(self.df_summ.iloc[0,0]))[0][0])
+        self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.INV_LIST==float(self.df_summ.iloc[0,0]))[0][0])
+        self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==float(self.df_summ.iloc[0,0]))[0][0])
         self.ui_obj.comboBox_MES_I_GR.setCurrentIndex(np.where(self.MONTH_LIST==self.MES_I)[0][0])
         self.ui_obj.comboBox_MES_J_GR.setCurrentIndex(np.where(self.MONTH_LIST==self.MES_J)[0][0])
         self.ui_obj.comboBox_ANNO_I_GR.setCurrentIndex(np.where(self.YEAR_LIST==self.ANNO_I)[0][0])
@@ -530,12 +544,17 @@ class DegradaApp:
         ejex_name = self.ui_obj.comboBox_ejex.currentText()
         ejey_name = self.ui_obj.comboBox_ejey.currentText()
         self.WTG_I = float(self.ui_obj.comboBox_WTG_I.currentText())
+        if self.ui_obj.checkBox_BLOQUEAR.isChecked():
+            self.WTG_J = self.WTG_I
+            self.ui_obj.comboBox_WTG_J.setCurrentIndex(np.where(self.INV_LIST==self.WTG_I)[0][0])
+        else:
+            self.WTG_J = float(self.ui_obj.comboBox_WTG_J.currentText())
 
-        WTG_IDX_act = self.WTG_I
-        WTG_IDX_pst = self.WTG_I
+        WTG_IDX_act = np.where(self.INV_LIST==self.WTG_I)[0][0]
+        WTG_IDX_pst = np.where(self.INV_LIST==self.WTG_J)[0][0]
 
-        wind_data_i, pot_data_i = self.Getcurva(WTG_IDX_act, self.MES_I, self.ANNO_I)
-        wind_data_j, pot_data_j = self.Getcurva(WTG_IDX_pst, self.MES_J, self.ANNO_J)
+        wind_data_i, pot_data_i = self.Getcurva(self.WTG_I, self.MES_I, self.ANNO_I)
+        wind_data_j, pot_data_j = self.Getcurva(self.WTG_J, self.MES_J, self.ANNO_J)
 
         #Tpanel_data_i, Tpanel_data_j = self.GetTpanelxCab()
         #pala_num = int(self.ui_obj.comboBox_pala.currentText())-1
@@ -550,8 +569,9 @@ class DegradaApp:
         else:
             FILENAME = self.GetFILENAME(ejex_name)
             df_extra = pd.read_pickle(f'dataset/{FILENAME}')
+            df_extra = df_extra.loc[self.lim_date:,:]
             ejex_data_i = self.GetDataInversor(df_extra, self.WTG_I, self.MES_I, self.ANNO_I)
-            ejex_data_j = self.GetDataInversor(df_extra, self.WTG_I, self.MES_J, self.ANNO_J)
+            ejex_data_j = self.GetDataInversor(df_extra, self.WTG_J, self.MES_J, self.ANNO_J)
 
         if ejey_name=='Irradiancia':
             ejey_data_i = wind_data_i
@@ -563,8 +583,9 @@ class DegradaApp:
         else:
             FILENAME = self.GetFILENAME(ejey_name)
             df_extra = pd.read_pickle(f'dataset/{FILENAME}')
+            df_extra = df_extra.loc[self.lim_date:,:]
             ejey_data_i = self.GetDataInversor(df_extra, self.WTG_I, self.MES_I, self.ANNO_I)
-            ejey_data_j = self.GetDataInversor(df_extra, self.WTG_I, self.MES_J, self.ANNO_J)
+            ejey_data_j = self.GetDataInversor(df_extra, self.WTG_J, self.MES_J, self.ANNO_J)
 
 
         # if ejex_name=='Temp. Panel':
@@ -604,11 +625,11 @@ class DegradaApp:
         else:
             self.WTG_J = float(self.ui_obj.comboBox_WTG_J.currentText())
 
-        WTG_IDX_act = self.WTG_I
-        WTG_IDX_pst = self.WTG_J
+        WTG_IDX_act = np.where(self.INV_LIST==self.WTG_I)[0][0]
+        WTG_IDX_pst = np.where(self.INV_LIST==self.WTG_J)[0][0]
 
-        data_act = self.Getcurva(WTG_IDX_act, self.MES_I, self.ANNO_I)
-        data_past = self.Getcurva(WTG_IDX_pst, self.MES_J, self.ANNO_J)
+        data_act = self.Getcurva(self.WTG_I, self.MES_I, self.ANNO_I)
+        data_past = self.Getcurva(self.WTG_J, self.MES_J, self.ANNO_J)
 
         if len(self.dict_data['curva1'])>1:
             curva_y1, point_1 = self.dict_data['curva1'][WTG_IDX_act], self.dict_data['punto1'][WTG_IDX_act]
@@ -622,8 +643,8 @@ class DegradaApp:
             diff = self.diff_chache_list[0]
             diff_per = self.diff_per_chache_list[0]
 
-        #diff = point_1[0] - point_2[0]
-        #diff_per = diff/point_2[0]
+        # diff = point_1[0] - point_2[0]
+        # diff_per = diff/point_2[0]
 
         self.figure.clear()
         # create an axis
@@ -636,18 +657,18 @@ class DegradaApp:
         COLOR_1_alt = 'red'
         COLOR_2_alt = 'blue'
 
-        axs.scatter(data_past[0], data_past[1], color=COLOR_2, s=1.5, alpha=.4)
-        axs.scatter(data_act[0], data_act[1], color=COLOR_1, s=1.5, alpha=.4)
+        axs.scatter(data_past[0], data_past[1], color=COLOR_2, s=2, alpha=.4)
+        axs.scatter(data_act[0], data_act[1], color=COLOR_1, s=2, alpha=.4)
 
         axs.plot(curva_y2[0], curva_y2[1], color=COLOR_2_alt, alpha=.75,
                     label=f'S1: INV {self.WTG_J} - Mes {self.MES_J}/{self.ANNO_J}')
         axs.plot(curva_y1[0], curva_y1[1], color=COLOR_1_alt, alpha=.75,
                     label=f'S2: INV {self.WTG_I} - Mes {self.MES_I}/{self.ANNO_I}')
 
-        #axs.plot([point_1[0], point_1[0]], [0, point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
-        #axs.plot([0, point_1[0]], [ point_1[1], point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
-        #axs.plot([point_2[0], point_2[0]], [0, point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
-        #axs.plot([0, point_2[0]], [ point_2[1], point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
+        axs.plot([point_1[0], point_1[0]], [0, point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
+        axs.plot([0, point_1[0]], [ point_1[1], point_1[1]], color=COLOR_1_alt, linestyle='--', alpha=.5)
+        axs.plot([point_2[0], point_2[0]], [0, point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
+        axs.plot([0, point_2[0]], [ point_2[1], point_2[1]], color=COLOR_2_alt, linestyle='--', alpha=.5)
 
         axs.text(x=0, y=800, s=f''' S1: ({round(point_2[0],2)},  {round(point_2[1],2)})\n S2: ({round(point_1[0],2)},  {round(point_1[1],2)})''',
                 fontsize=9)
@@ -672,7 +693,7 @@ class DegradaApp:
 
     def ItemTabla_clicked(self, clickedIndex):
         row=clickedIndex.row()
-        wtg_selected = int(self.df_summ.iloc[row,0])
+        wtg_selected = float(self.df_summ.iloc[row,0])
         self.ui_obj.comboBox_WTG_I.setCurrentIndex(np.where(self.INV_LIST==wtg_selected)[0][0])
         self.GraficaCurvas_IZQ()
 
@@ -689,7 +710,7 @@ class DegradaApp:
         arch_names = self.df_tags_names.iloc[:,2]
         #variables = []
         for work_sheet in sheet_names:
-            df_ws = pd.read_excel('dataset/rubi_tag_ref.xlsx', sheet_name=work_sheet)
+            df_ws = pd.read_excel(self.config_file['DATOS']['tags'], sheet_name=work_sheet)
             tags_variables.append(df_ws.iloc[:,1].to_list())
 
         with PI.PIServer(server=self.PI_SERVER, username=self.PI_USER, password=self.PI_PASS,
@@ -718,8 +739,8 @@ class DegradaApp:
                 self.ui_obj.lbl_actual.setText(f'Datos actualizados desde {fecha_min} al {fecha_max}')
                 df_new.drop_duplicates(inplace=True)
                 df_new.to_pickle(f'./dataset/{arch_names[idx]}')
-        self.df_pot = pd.read_pickle('./dataset/potencia_rubi.pk')
-        self.df_wind = pd.read_pickle('./dataset/irradiancia_rubi.pk')
+        self.df_pot = pd.read_pickle(self.config_file['DATOS']['potencia'])
+        self.df_wind = pd.read_pickle(self.config_file['DATOS']['irradiancia'])
         #
         #
         #
@@ -756,7 +777,7 @@ class DegradaApp:
         # self.ui_obj.lbl_actual.setText(f'Datos actualizados desde {fecha_min} al {fecha_max}')
         #
         # self.df_pot.to_pickle('./dataset/data_potencia.pkl')
-        # self.df_  wind.to_pickle('./dataset/data_viento.pkl')
+        # self.df_wind.to_pickle('./dataset/data_viento.pkl')
 
         self.pot_arr = self.df_pot.to_numpy()
         self.wind_arr = self.df_wind.to_numpy()
@@ -764,7 +785,7 @@ class DegradaApp:
         #self.PIR_NUM = 1
     def Descargar_datos_TPanel(self, wtg_num, start_d, end_d):
         #son 3 angulos p/wtg:
-        self.df_tags_pitch = pd.read_excel('./dataset/rubi_tag_ref.xlsx', sheet_name='temp_panel')
+        self.df_tags_pitch = pd.read_excel(self.config_file['DATOS']['tags'], sheet_name='temp_panel')
         self.df_tags_pitch['cab_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('chnRUBI50.')[1].split('.')[0]))
         #self.df_tags_pitch['blade_id'] = self.df_tags_pitch.iloc[:,1].apply(lambda x: int(x.split('Pth')[1].split('AngVal')[0]))
         #Lista de tags de pitch correspondientes a la turbina seleccionada wtg_num
@@ -785,7 +806,7 @@ class DegradaApp:
 
     def SetupPI(self):
         PI.PIConfig.DEFAULT_TIMEZONE = 'Etc/GMT+5'
-        self.PI_SERVER = 'PEREDGMOY1001'
+        self.PI_SERVER = 'CAM-PI'
         self.INTERVAL = '15m'
         # Datos de Cabina y query:
         #self.END_D = datetime.datetime.now()
@@ -902,7 +923,7 @@ class DegradaApp:
         #self.ui_obj.comboBox_ANNO_I.activated.connect(self.ActualizaFechas)
 
         self.ui_obj.comboBox_ANNO_J.addItems([str(x) for x in self.YEAR_LIST])
-        self.ui_obj.comboBox_ANNO_J.setCurrentIndex(0)
+        self.ui_obj.comboBox_ANNO_J.setCurrentIndex(1)
         #self.ui_obj.comboBox_ANNO_J.activated.connect(self.ActualizaFechas)
 
         self.ui_obj.comboBox_MES_I.addItems([str(x) for x in self.MONTH_LIST])
@@ -932,7 +953,7 @@ class DegradaApp:
         #self.lista_ejey = ['Potencia', 'Irradiancia']
         #self.lista_ejex = ['Potencia', 'Irradiancia']
         self.lista_variables = []
-        self.df_tags_names = pd.read_excel('./dataset/rubi_tag_ref.xlsx', sheet_name=0)
+        self.df_tags_names = pd.read_excel(self.config_file['DATOS']['tags'], sheet_name=0)
         self.lista_variables.extend(self.df_tags_names.iloc[:,0].to_list())
         #self.lista_ejex.extend(self.df_tags_names.iloc[:,0].to_list())
         self.ui_obj.comboBox_ejey.addItems(self.lista_variables)

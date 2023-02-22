@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Rubi - curvas</string>
+   <string>Jaguito - curvas</string>
   </property>
   <property name="styleSheet">
    <string notr="true"/>
@@ -96,7 +96,7 @@
            </property>
            <property name="icon">
             <iconset>
-             <normaloff>D:/OneDrive - ITALTEL PERU SAC/Escritorio/566023-901529706.png</normaloff>D:/OneDrive - ITALTEL PERU SAC/Escritorio/566023-901529706.png</iconset>
+             <normaloff>566023-901529706.png</normaloff>566023-901529706.png</iconset>
            </property>
           </widget>
           <widget class="QLabel" name="lbl_actual">
@@ -773,9 +773,6 @@
              <width>71</width>
              <height>31</height>
             </rect>
-           </property>
-           <property name="text">
-            <string/>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>
