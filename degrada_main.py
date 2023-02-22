@@ -756,7 +756,7 @@ class DegradaApp:
         # self.ui_obj.lbl_actual.setText(f'Datos actualizados desde {fecha_min} al {fecha_max}')
         #
         # self.df_pot.to_pickle('./dataset/data_potencia.pkl')
-        # self.df_wind.to_pickle('./dataset/data_viento.pkl')
+        # self.df_  wind.to_pickle('./dataset/data_viento.pkl')
 
         self.pot_arr = self.df_pot.to_numpy()
         self.wind_arr = self.df_wind.to_numpy()

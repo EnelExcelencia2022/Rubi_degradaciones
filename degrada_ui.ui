@@ -243,7 +243,7 @@
             </rect>
            </property>
            <property name="text">
-            <string>WTG:</string>
+            <string>INV:</string>
            </property>
           </widget>
           <widget class="QLabel" name="label_4">
@@ -321,7 +321,7 @@
             </rect>
            </property>
            <property name="text">
-            <string>WTG:</string>
+            <string>INV:</string>
            </property>
           </widget>
           <widget class="QComboBox" name="comboBox_WTG_J">
@@ -353,7 +353,7 @@
             </rect>
            </property>
            <property name="text">
-            <string>Turbinas con mayor desplazamiento entre mes base y mes eval:</string>
+            <string>Inversores con mayor degradación entre mes base y mes eval:</string>
            </property>
           </widget>
           <widget class="QCheckBox" name="checkBox_BLOQUEAR">
